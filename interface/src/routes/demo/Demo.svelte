@@ -5,27 +5,28 @@
 	import { notifications } from '$lib/components/toasts/notifications';
 	import SettingsCard from '$lib/components/SettingsCard.svelte';
 	import Light from '~icons/tabler/bulb';
-	import Info from '~icons/tabler/info-circle';
-	import Save from '~icons/tabler/device-floppy';
-	import Reload from '~icons/tabler/reload';
+	import MdiWaterPump from '~icons/mdi/water-pump';
+	import MdiWaterPumpOff from '~icons/mdi/water-pump-off';
 	import { socket } from '$lib/stores/socket';
-	import type { LightState } from '$lib/types/models';
+	import type { WaterSupply } from '$lib/types/models';
 
-	let lightState: LightState = { led_on: false };
+	let waterState: WaterSupply = { waterIn: false, waterLevel: 10 };
 
-	let lightOn = false;
-
-	async function getLightstate() {
+	async function getWaterstate() {
 		try {
-			const response = await fetch('/rest/lightState', {
+			console.log($page.data.features.security)
+			const response = await fetch('/rest/waterState', {
 				method: 'GET',
 				headers: {
-					Authorization: $page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic',
-					'Content-Type': 'application/json'
+					Authorization: $page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic 123',
+					'Content-Type': 'application/json',
+					"Cache-Control": "no-cache"
 				}
 			});
-			const light = await response.json();
-			lightOn = light.led_on;
+			console.log("🚀 ~ getWaterstate ~ response:", response)
+			const data = await response.json();
+			console.log("🚀 ~ getWaterstate ~ data:", data)
+			waterState = data;
 		} catch (error) {
 			console.error('Error:', error);
 		}
@@ -33,83 +34,45 @@
 	}
 
 	onMount(() => {
-		socket.on<LightState>('led', (data) => {
-			lightState = data;
+		socket.on<WaterSupply>('water', (data) => {
+		console.log("🚀 ~ onMount ~ data:", data)
+			waterState = data;
 		});
-		getLightstate();
+		getWaterstate();
 	});
 
-	onDestroy(() => socket.off('led'));
-
-	async function postLightstate() {
-		try {
-			const response = await fetch('/rest/lightState', {
-				method: 'POST',
-				headers: {
-					Authorization: $page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic',
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({ led_on: lightOn })
-			});
-			if (response.status == 200) {
-				notifications.success('Light state updated.', 3000);
-				const light = await response.json();
-				lightOn = light.led_on;
-			} else {
-				notifications.error('User not authorized.', 3000);
-			}
-		} catch (error) {
-			console.error('Error:', error);
-		}
-	}
+	onDestroy(() => socket.off('water'));
 </script>
 
 <SettingsCard collapsible={false}>
 	<Light slot="icon" class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
-	<span slot="title">Light State</span>
+	<span slot="title">Estado del Agua Edificio Danny</span>
 	<div class="w-full">
-		<h1 class="text-xl font-semibold">REST Example</h1>
-		<div class="alert alert-info my-2 shadow-lg">
-			<Info class="h-6 w-6 flex-shrink-0 stroke-current" />
-			<span>The form below controls the LED via the RESTful service exposed by the ESP device.</span
-			>
+		<h1 class="text-xl font-semibold">Entrada de Agua</h1>
+		<div class="alert alert-info my-2 shadow-lg bg-orange-300">
+			<MdiWaterPump class="h-6 w-6 flex-shrink-0 stroke-current" />
+			<span class="text-green-600">Indica entrada de agua.</span>
+
+			<MdiWaterPumpOff class="h-6 w-6 flex-shrink-0 stroke-current" />
+			<span class="text-red-600">Indica ausencia de agua.</span>
 		</div>
 		<div class="flex flex-row flex-wrap justify-between gap-x-2">
-			<div class="form-control w-52">
-				<label class="label cursor-pointer">
-					<span class="mr-4">Light State?</span>
-					<input type="checkbox" bind:checked={lightOn} class="checkbox checkbox-primary" />
-				</label>
+
+			{#if waterState.waterIn}
+
+			<div class=" w-full text-green-600 font-semibold h-4">
+					<MdiWaterPump class="h-6 w-6 flex-shrink-0 stroke-current" />
+					<span class="mr-4">Esta entrando agua, quedate tranquilo</span>
 			</div>
-			<div class="flex-grow" />
-			<button class="btn btn-primary inline-flex items-center" on:click={postLightstate}
-				><Save class="mr-2 h-5 w-5" /><span>Save</span></button
-			>
-			<button class="btn btn-primary inline-flex items-center" on:click={getLightstate}
-				><Reload class="mr-2 h-5 w-5" /><span>Reload</span></button
-			>
+			{:else}
+
+			<div class=" w-full text-red-600 font-semibold h-4">
+					<MdiWaterPumpOff class="h-6 w-6 flex-shrink-0 stroke-current" />
+					<span class="mr-4">Pendiente con el nivel del Agua</span>
+			</div>
+			{/if}
 		</div>
 		<div class="divider" />
-		<h1 class="text-xl font-semibold">Event Socket Example</h1>
-		<div class="alert alert-info my-2 shadow-lg">
-			<Info class="h-6 w-6 flex-shrink-0 stroke-current" />
-			<span
-				>The switch below controls the LED via the event system which uses WebSocket under the hood.
-				It will automatically update whenever the LED state changes.</span
-			>
-		</div>
-		<div class="form-control w-52">
-			<label class="label cursor-pointer">
-				<span class="">Light State?</span>
-				<input
-					type="checkbox"
-					class="toggle toggle-primary"
-					bind:checked={lightState.led_on}
-					on:change={() => {
-						socket.sendEvent('led', lightState);
-					}}
-				/>
-			</label>
-		</div>
+		<h1 class="text-xl font-semibold">Aqui se vendra lo del nivel del agua</h1>
 	</div>
 </SettingsCard>

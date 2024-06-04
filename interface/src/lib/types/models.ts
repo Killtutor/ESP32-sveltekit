@@ -59,6 +59,10 @@ export type ApSettings = {
 export type LightState = {
 	led_on: boolean;
 };
+export type WaterSupply = {
+	waterIn: boolean;
+	waterLevel: number;
+};
 
 export type BrokerSettings = {
 	mqtt_path: string;

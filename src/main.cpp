@@ -1,20 +1,7 @@
-/**
- *   ESP32 SvelteKit
- *
- *   A simple, secure and extensible framework for IoT projects for ESP32 platforms
- *   with responsive Sveltekit front-end built with TailwindCSS and DaisyUI.
- *   https://github.com/theelims/ESP32-sveltekit
- *
- *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 - 2024 theelims
- *
- *   All Rights Reserved. This software may be modified and distributed under
- *   the terms of the LGPL v3 license. See the LICENSE file for details.
- **/
 
 #include <ESP32SvelteKit.h>
-#include <LightMqttSettingsService.h>
-#include <LightStateService.h>
+#include <WaterSupplyMQTTService.h>
+#include <WaterSupplyService.h>
 #include <PsychicHttpServer.h>
 
 #define SERIAL_BAUD_RATE 115200
@@ -23,15 +10,15 @@ PsychicHttpServer server;
 
 ESP32SvelteKit esp32sveltekit(&server, 120);
 
-LightMqttSettingsService lightMqttSettingsService = LightMqttSettingsService(&server,
+WaterMqttSettingsService waterMqttSettingsService = WaterMqttSettingsService(&server,
                                                                              esp32sveltekit.getFS(),
                                                                              esp32sveltekit.getSecurityManager());
 
-LightStateService lightStateService = LightStateService(&server,
+WaterStateService waterStateService = WaterStateService(&server,
                                                         esp32sveltekit.getSocket(),
                                                         esp32sveltekit.getSecurityManager(),
                                                         esp32sveltekit.getMqttClient(),
-                                                        &lightMqttSettingsService);
+                                                        &waterMqttSettingsService);
 
 void setup()
 {
@@ -41,14 +28,39 @@ void setup()
     // start ESP32-SvelteKit
     esp32sveltekit.begin();
 
-    // load the initial light settings
-    lightStateService.begin();
-    // start the light service
-    lightMqttSettingsService.begin();
+    // load the initial Water settings
+    waterStateService.begin();
+    // start the Water service
+    waterMqttSettingsService.begin();
 }
 
 void loop()
 {
+
+    bool sensor = digitalRead(WATER_IN_SENSOR);
+    waterStateService.update([&](WaterState &state)
+                             {
+                                 if (state.waterIn == (sensor == 1 ? false : true))
+                                 {
+                                     return StateUpdateResult::UNCHANGED; // water is unchanged
+                                 }
+                                 state.waterIn = !state.waterIn;    // Set the water boolean value
+                                 return StateUpdateResult::CHANGED; // notify StatefulService by returning CHANGED
+                             },
+                             "Sensor");
+
+    digitalWrite(WATER_LEVEL_TRIG, LOW);
+    delayMicroseconds(2);
+    digitalWrite(WATER_LEVEL_TRIG, HIGH);
+    delayMicroseconds(210);
+    digitalWrite(WATER_LEVEL_TRIG, LOW);
+    long duration = pulseInLong(WATER_LEVEL_ECHO, HIGH);
+    long distance = (duration / 29) / 2;
+    Serial.print("Distance: ");
+    Serial.println(distance);
+
+    sleep(2);
+
     // Delete Arduino loop task, as it is not needed in this example
-    vTaskDelete(NULL);
+    // vTaskDelete(NULL);
 }

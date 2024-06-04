@@ -1,57 +1,46 @@
-/**
- *   ESP32 SvelteKit
- *
- *   A simple, secure and extensible framework for IoT projects for ESP32 platforms
- *   with responsive Sveltekit front-end built with TailwindCSS and DaisyUI.
- *   https://github.com/theelims/ESP32-sveltekit
- *
- *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 - 2024 theelims
- *
- *   All Rights Reserved. This software may be modified and distributed under
- *   the terms of the LGPL v3 license. See the LICENSE file for details.
- **/
 
-#include <LightStateService.h>
+#include <WaterSupplyService.h>
 
-LightStateService::LightStateService(PsychicHttpServer *server,
+WaterStateService::WaterStateService(PsychicHttpServer *server,
                                      EventSocket *socket,
                                      SecurityManager *securityManager,
                                      PsychicMqttClient *mqttClient,
-                                     LightMqttSettingsService *lightMqttSettingsService) : _httpEndpoint(LightState::read,
-                                                                                                         LightState::update,
+                                     WaterMqttSettingsService *WaterMqttSettingsService) : _httpEndpoint(WaterState::read,
+                                                                                                         WaterState::update,
                                                                                                          this,
                                                                                                          server,
-                                                                                                         LIGHT_SETTINGS_ENDPOINT_PATH,
+                                                                                                         Water_SETTINGS_ENDPOINT_PATH,
                                                                                                          securityManager,
                                                                                                          AuthenticationPredicates::IS_AUTHENTICATED),
-                                                                                           _eventEndpoint(LightState::read,
-                                                                                                          LightState::update,
+                                                                                           _eventEndpoint(WaterState::read,
+                                                                                                          WaterState::update,
                                                                                                           this,
                                                                                                           socket,
-                                                                                                          LIGHT_SETTINGS_EVENT),
-                                                                                           _mqttEndpoint(LightState::homeAssistRead,
-                                                                                                         LightState::homeAssistUpdate,
+                                                                                                          Water_SETTINGS_EVENT),
+                                                                                           _mqttEndpoint(WaterState::homeAssistRead,
+                                                                                                         WaterState::homeAssistUpdate,
                                                                                                          this,
                                                                                                          mqttClient),
-                                                                                           _webSocketServer(LightState::read,
-                                                                                                            LightState::update,
+                                                                                           _webSocketServer(WaterState::read,
+                                                                                                            WaterState::update,
                                                                                                             this,
                                                                                                             server,
-                                                                                                            LIGHT_SETTINGS_SOCKET_PATH,
+                                                                                                            Water_SETTINGS_SOCKET_PATH,
                                                                                                             securityManager,
                                                                                                             AuthenticationPredicates::IS_AUTHENTICATED),
                                                                                            _mqttClient(mqttClient),
-                                                                                           _lightMqttSettingsService(lightMqttSettingsService)
+                                                                                           _WaterMqttSettingsService(WaterMqttSettingsService)
 {
-    // configure led to be output
-    pinMode(LED_BUILTIN, OUTPUT);
+    // configure Water Input Sensor to be PullUp Input (1 == false, 0 == true)
+    pinMode(WATER_IN_SENSOR, INPUT_PULLUP);
+    pinMode(WATER_LEVEL_TRIG, OUTPUT);
+    pinMode(WATER_LEVEL_ECHO, INPUT);
 
     // configure MQTT callback
-    _mqttClient->onConnect(std::bind(&LightStateService::registerConfig, this));
+    _mqttClient->onConnect(std::bind(&WaterStateService::registerConfig, this));
 
-    // configure update handler for when the light settings change
-    _lightMqttSettingsService->addUpdateHandler([&](const String &originId)
+    // configure update handler for when the Water settings change
+    _WaterMqttSettingsService->addUpdateHandler([&](const String &originId)
                                                 { registerConfig(); },
                                                 false);
 
@@ -61,20 +50,21 @@ LightStateService::LightStateService(PsychicHttpServer *server,
                      false);
 }
 
-void LightStateService::begin()
+void WaterStateService::begin()
 {
     _httpEndpoint.begin();
     _eventEndpoint.begin();
-    _state.ledOn = DEFAULT_LED_STATE;
+    _state.waterIn = DEFAULT_WATER_STATE;
+    _state.waterLevel = 10;
     onConfigUpdated();
 }
 
-void LightStateService::onConfigUpdated()
+void WaterStateService::onConfigUpdated()
 {
-    digitalWrite(LED_BUILTIN, _state.ledOn ? 1 : 0);
+    // digitalWrite(LED_BUILTIN, _state.ledOn ? 1 : 0);
 }
 
-void LightStateService::registerConfig()
+void WaterStateService::registerConfig()
 {
     if (!_mqttClient->connected())
     {
@@ -85,7 +75,7 @@ void LightStateService::registerConfig()
     String pubTopic;
 
     JsonDocument doc;
-    _lightMqttSettingsService->read([&](LightMqttSettings &settings)
+    _WaterMqttSettingsService->read([&](WaterMqttSettings &settings)
                                     {
     configTopic = settings.mqttPath + "/config";
     subTopic = settings.mqttPath + "/set";
